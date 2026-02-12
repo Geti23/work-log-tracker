@@ -18,7 +18,7 @@ if os.path.exists(render_secret_path):
     try:
         shutil.copy(render_secret_path, streamlit_secret_path)
     except Exception as e:
-        pass # File might already exist or be locked
+        pass 
 # -----------------------------
 
 # --- Configuration ---
@@ -27,14 +27,11 @@ SCOPE = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/au
 
 # --- LOGIN SYSTEM ---
 def check_password():
-    """Returns `True` if the user had a correct password."""
-
     def password_entered():
-        """Checks whether a password entered by the user is correct."""
         if st.session_state["username"] in st.secrets["passwords"] and \
            st.session_state["password"] == st.secrets["passwords"][st.session_state["username"]]:
             st.session_state["password_correct"] = True
-            del st.session_state["password"]  # Don't keep password in session state
+            del st.session_state["password"]
             del st.session_state["username"]
         else:
             st.session_state["password_correct"] = False
@@ -42,14 +39,12 @@ def check_password():
     if st.session_state.get("password_correct", False):
         return True
 
-    # Show inputs for username and password
     st.title("🔒 Login Required")
     st.text_input("Username", key="username")
     st.text_input("Password", type="password", on_change=password_entered, key="password")
     
     if "password_correct" in st.session_state and not st.session_state["password_correct"]:
         st.error("😕 User not known or password incorrect")
-        
     return False
 
 # --- Google Sheets Backend Functions ---
@@ -135,29 +130,52 @@ def format_minutes(total_minutes):
     return f"{m}m"
 
 # --- MAIN EXECUTION ---
-# This check ensures nothing loads unless password is correct
 if check_password():
 
-    # --- UI Layout & CSS ---
     st.set_page_config(page_title="Work Log Tracker", layout="wide", page_icon="📅")
 
     st.markdown("""
     <style>
+        /* SCROLLING WRAPPER */
+        .week-container {
+            display: flex;
+            overflow-x: auto;
+            gap: 12px;
+            padding-bottom: 15px;
+            
+            /* CENTERING MAGIC */
+            margin: 0 auto;       
+            width: fit-content;   
+            max-width: 100%;      
+        }
+        
         .day-card {
             background-color: var(--secondary-background-color);
-            border: 1px solid rgba(49, 51, 63, 0.2);
+            
+            /* DYNAMIC BORDER FIX: SAFE NEUTRAL GRAY */
+            /* Visible on both White and Black backgrounds */
+            border: 1px solid rgba(140, 140, 140, 0.35);
+            
             border-radius: 6px;
             padding: 10px;
             height: 75vh;
+            
+            /* WIDTH SETTINGS */
+            min-width: 250px; 
+            flex: 0 0 250px;
+            
             display: flex;
             flex-direction: column;
-            margin-bottom: 10px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+        
         .day-header {
             font-family: 'Courier New', Courier, monospace;
             text-align: center;
-            border-bottom: 1px solid rgba(49, 51, 63, 0.2);
+            
+            /* DYNAMIC BORDER FIX */
+            border-bottom: 1px solid rgba(140, 140, 140, 0.35);
+            
             padding-bottom: 5px;
             margin-bottom: 10px;
             color: var(--text-color);
@@ -185,7 +203,10 @@ if check_password():
             font-size: 0.85em;
             margin-bottom: 8px;
             padding-bottom: 4px;
-            border-bottom: 1px solid rgba(49, 51, 63, 0.1);
+            
+            /* DYNAMIC BORDER FIX */
+            border-bottom: 1px solid rgba(140, 140, 140, 0.15);
+            
             color: var(--text-color);
         }
         .ticket-id {
@@ -198,7 +219,9 @@ if check_password():
             font-weight: bold;
         }
         .day-footer {
-            border-top: 1px solid rgba(49, 51, 63, 0.2);
+            /* DYNAMIC BORDER FIX */
+            border-top: 1px solid rgba(140, 140, 140, 0.35);
+            
             padding-top: 8px;
             text-align: right;
             font-family: 'Consolas', 'Courier New', monospace;
@@ -206,6 +229,22 @@ if check_password():
             color: var(--text-color);
             font-size: 0.9em;
             flex-shrink: 0;
+        }
+        
+        /* Custom Scrollbar */
+        .week-container::-webkit-scrollbar {
+            height: 8px;
+        }
+        .week-container::-webkit-scrollbar-track {
+            background: rgba(140, 140, 140, 0.1);
+            border-radius: 4px;
+        }
+        .week-container::-webkit-scrollbar-thumb {
+            background: rgba(140, 140, 140, 0.3);
+            border-radius: 4px;
+        }
+        .week-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(140, 140, 140, 0.5);
         }
     </style>
     """, unsafe_allow_html=True)
@@ -228,7 +267,7 @@ if check_password():
                     st.error("Description is required.")
 
         st.divider()
-        if st.button("🔄 Refresh Data", help="Click this if you edited the Google Sheet manually"):
+        if st.button("🔄 Refresh Data", help="Click if you edited Google Sheet manually"):
             get_data.clear()
             st.rerun()
 
@@ -243,7 +282,7 @@ if check_password():
             st.download_button("Download All Data (CSV)", csv, 'work_logs_backup.csv', 'text/csv')
 
     # Main Content Area
-    st.title("Work Log Calendar")
+    st.markdown("<h1 style='text-align: center;'>Work Log Calendar</h1>", unsafe_allow_html=True)
 
     if search_query:
         st.subheader(f"Results for '{search_query}'")
@@ -251,7 +290,7 @@ if check_password():
         if not results.empty:
             for _, row in results.iterrows():
                 st.markdown(textwrap.dedent(f"""
-                <div style="background-color: var(--secondary-background-color); padding: 10px; margin-bottom: 5px; border-radius: 5px; border: 1px solid rgba(49, 51, 63, 0.2);">
+                <div style="background-color: var(--secondary-background-color); padding: 10px; margin-bottom: 5px; border-radius: 5px; border: 1px solid rgba(140, 140, 140, 0.35);">
                     <span style="color: #8b949e; font-weight:bold;">{row['date']}</span> | 
                     <span style="color: #4169e1; font-weight:bold;">{row['ticket_id']}</span> 
                     <span style="color: var(--text-color);">{row['description']}</span>
@@ -264,27 +303,34 @@ if check_password():
         if 'week_offset' not in st.session_state:
             st.session_state.week_offset = 0
 
-        col_prev, col_current, col_next, _ = st.columns([1, 2, 1, 6])
+        # --- CENTERED NAVIGATION ---
+        _, col_prev, col_text, col_next, _ = st.columns([5, 1, 2, 1, 5])
+        
         with col_prev:
-            if st.button("← Prev Week"):
+            if st.button("←", use_container_width=True):
                 st.session_state.week_offset += 1 
         with col_next:
-            if st.button("Next Week →"):
+            if st.button("→", use_container_width=True):
                 st.session_state.week_offset -= 1
 
         today = datetime.date.today()
         start_of_week = today - timedelta(days=today.weekday() + 1) - timedelta(weeks=st.session_state.week_offset)
         end_of_week = start_of_week + timedelta(days=6)
         
-        with col_current:
-            st.write(f"**Week of {start_of_week.strftime('%b %d')}**")
+        with col_text:
+            st.markdown(
+                f"<div style='text-align: center; font-weight: bold; padding-top: 10px; white-space: nowrap;'>"
+                f"Week of {start_of_week.strftime('%b %d')}"
+                f"</div>", 
+                unsafe_allow_html=True
+            )
 
         weekly_data = get_logs(start_date=start_of_week, end_date=end_of_week)
-        
-        cols = st.columns(7)
         days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
-        for i, col in enumerate(cols):
+        week_html = '<div class="week-container">'
+        
+        for i in range(7):
             current_day_date = start_of_week + timedelta(days=i)
             date_str = current_day_date.strftime("%Y-%m-%d")
             
@@ -299,7 +345,7 @@ if check_password():
             day_logs = weekly_data[weekly_data['date'] == date_str]
             day_total_minutes = 0
             
-            html_content = textwrap.dedent(f"""
+            week_html += textwrap.dedent(f"""
                 <div class="day-card">
                     <div class="day-header">
                         <div class="day-name">{day_label}</div>
@@ -315,7 +361,7 @@ if check_password():
                 
                 day_total_minutes += parse_time_str(t_time)
                 
-                html_content += textwrap.dedent(f"""
+                week_html += textwrap.dedent(f"""
                     <div class="ticket-entry">
                         <span class="ticket-id">{t_id}</span>
                         {desc}
@@ -323,14 +369,16 @@ if check_password():
                     </div>
                 """)
             
-            html_content += "</div>"
+            week_html += "</div>"
             total_display = format_minutes(day_total_minutes)
             if total_display:
-                html_content += textwrap.dedent(f"""
+                week_html += textwrap.dedent(f"""
                     <div class="day-footer">
                         Total: <span style="color: #2ea043">{total_display}</span>
                     </div>
                 """)
-            html_content += "</div>"
-            with col:
-                st.markdown(html_content, unsafe_allow_html=True)
+            
+            week_html += "</div>"
+
+        week_html += '</div>'
+        st.markdown(week_html, unsafe_allow_html=True)
