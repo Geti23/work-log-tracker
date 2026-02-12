@@ -6,6 +6,23 @@ import textwrap
 import re
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import os
+import shutil # <--- Add this import
+
+# --- RENDER DEPLOYMENT FIX ---
+# Render creates the secret file at /etc/secrets/secrets.toml
+# But Streamlit expects it at .streamlit/secrets.toml
+# This block moves it to the right place at startup.
+
+render_secret_path = "/etc/secrets/secrets.toml"
+streamlit_secret_path = ".streamlit/secrets.toml"
+
+# Check if we are on Render (by checking if the render secret exists)
+if os.path.exists(render_secret_path):
+    # Create the .streamlit folder if it doesn't exist
+    os.makedirs(".streamlit", exist_ok=True)
+    # Copy the file to the correct location
+    shutil.copy(render_secret_path, streamlit_secret_path)
 
 # --- Configuration ---
 SHEET_NAME = "Work Logs"
