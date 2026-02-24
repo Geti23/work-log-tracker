@@ -87,6 +87,24 @@ def add_entry(date, ticket, desc, time):
     sheet.append_row([date_str, ticket, desc, time])
     get_data.clear()
 
+def update_entry(df_index, date, ticket, desc, time):
+    client = get_client()
+    sheet = client.open(SHEET_NAME).sheet1
+    
+    sheet_row = int(df_index) + 2 
+    date_str = date.strftime("%Y-%m-%d")
+    
+    sheet.update(f"A{sheet_row}:D{sheet_row}", [[date_str, ticket, desc, time]])
+    get_data.clear()
+
+def delete_entry(df_index):
+    client = get_client()
+    sheet = client.open(SHEET_NAME).sheet1
+    
+    sheet_row = int(df_index) + 2 
+    sheet.delete_rows(sheet_row)
+    get_data.clear()
+
 def get_logs(search_term=None, start_date=None, end_date=None):
     df = get_data()
     if df.empty: return df
@@ -202,25 +220,43 @@ if check_password():
             font-family: 'Consolas', 'Courier New', monospace;
             font-size: 0.85em;
             margin-bottom: 8px;
-            padding-bottom: 4px;
-            
-            /* DYNAMIC BORDER FIX */
-            border-bottom: 1px solid rgba(140, 140, 140, 0.15);
-            
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(140, 140, 140, 0.5);
             color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .ticket-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
         }
         .ticket-id {
             color: #4169e1; 
             font-weight: bold;
+            background-color: rgba(65, 105, 225, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
         }
         .time-spent {
             color: #2ea043; 
-            float: right;
             font-weight: bold;
+            background-color: rgba(46, 160, 67, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+        .ticket-desc {
+            line-height: 1.4;
+            background-color: rgba(140, 140, 140, 0.1);
+            padding: 6px 8px;
+            border-radius: 4px;
+            margin-top: 2px;
         }
         .day-footer {
             /* DYNAMIC BORDER FIX */
-            border-top: 1px solid rgba(140, 140, 140, 0.35);
+            border-top: 1px solid rgba(140, 140, 140, 0.5);
             
             padding-top: 8px;
             text-align: right;
@@ -271,6 +307,45 @@ if check_password():
             get_data.clear()
             st.rerun()
 
+        st.divider()
+        st.subheader("✏️ Edit / Delete Entry")
+        
+        all_logs = get_logs()
+        if not all_logs.empty:
+            options_map = {
+                f"ID {row['id']}: {row['date']} | {row['ticket_id']} ({row['time_spent']})": row['id'] 
+                for _, row in all_logs.iterrows()
+            }
+            
+            selected_label = st.selectbox("Select entry to modify", ["-- Select --"] + list(options_map.keys()))
+            
+            if selected_label != "-- Select --":
+                selected_id = options_map[selected_label]
+                selected_row = all_logs[all_logs['id'] == selected_id].iloc[0]
+                
+                with st.form("edit_delete_form"):
+                    edit_date = pd.to_datetime(selected_row['date']).date()
+                    new_date = st.date_input("Date", edit_date)
+                    new_ticket = st.text_input("Ticket ID", str(selected_row['ticket_id']))
+                    new_desc = st.text_area("Description", str(selected_row['description']))
+                    new_time = st.text_input("Time Spent", str(selected_row['time_spent']))
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.form_submit_button("💾 Update"):
+                            if new_desc:
+                                update_entry(selected_id, new_date, new_ticket, new_desc, new_time)
+                                st.success("Entry updated!")
+                                st.rerun()
+                            else:
+                                st.error("Description is required.")
+                    with col2:
+                        if st.form_submit_button("🗑️ Delete"):
+                            delete_entry(selected_id)
+                            st.success("Entry deleted!")
+                            st.rerun()
+
+        st.divider()
         st.subheader("🔍 Search")
         search_query = st.text_input("Search (ID, Desc, Date)")
         
@@ -363,9 +438,13 @@ if check_password():
                 
                 week_html += textwrap.dedent(f"""
                     <div class="ticket-entry">
-                        <span class="ticket-id">{t_id}</span>
-                        {desc}
-                        <span class="time-spent">{t_time}</span>
+                        <div class="ticket-header">
+                            <span class="ticket-id">{t_id}</span>
+                            <span class="time-spent">{t_time}</span>
+                        </div>
+                        <div class="ticket-desc">
+                            {desc}
+                        </div>
                     </div>
                 """)
             
@@ -374,7 +453,7 @@ if check_password():
             if total_display:
                 week_html += textwrap.dedent(f"""
                     <div class="day-footer">
-                        Total: <span style="color: #2ea043">{total_display}</span>
+                        Total: <span style="color: #2ea043; font-weight: bold; background-color: rgba(46, 160, 67, 0.1); padding: 2px 6px; border-radius: 4px; white-space: nowrap;">{total_display}</span>
                     </div>
                 """)
             
