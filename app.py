@@ -401,7 +401,7 @@ if check_password():
             )
 
         weekly_data = get_logs(start_date=start_of_week, end_date=end_of_week)
-        days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
         week_html = '<div class="week-container">'
         
@@ -411,11 +411,11 @@ if check_password():
             
             day_label = days[i]
             if current_day_date == today:
-                day_label = "Today"
-            elif current_day_date == today + timedelta(days=1):
-                day_label = "Tomorrow"
-            elif current_day_date == today - timedelta(days=1):
-                day_label = "Yesterday"
+                day_label = "<span style='color: #FFDF00; font-weight: bold; background-color: rgba(255, 223, 0, 0.1); padding: 2px 6px; border-radius: 4px; white-space: nowrap;'>Today</span><br>" + days[i]
+        #    elif current_day_date == today + timedelta(days=1):
+        #        day_label = "Tomorrow"
+        #    elif current_day_date == today - timedelta(days=1):
+        #        day_label = "Yesterday"
 
             day_logs = weekly_data[weekly_data['date'] == date_str]
             day_total_minutes = 0
