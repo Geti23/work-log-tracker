@@ -8,6 +8,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import os
 import shutil
+import calendar
 
 # --- RENDER DEPLOYMENT FIX ---
 render_secret_path = "/etc/secrets/secrets.toml"
@@ -171,12 +172,14 @@ if check_password():
             background-color: var(--secondary-background-color);
             
             /* DYNAMIC BORDER FIX: SAFE NEUTRAL GRAY */
-            /* Visible on both White and Black backgrounds */
             border: 1px solid rgba(140, 140, 140, 0.35);
             
             border-radius: 6px;
             padding: 10px;
-            height: 75vh;
+            
+            /* REDUCED HEIGHT FOR MULTIPLE ROWS */
+            height: 350px; /* Replaced 75vh */
+            min-height: 250px;
             
             /* WIDTH SETTINGS */
             min-width: 250px; 
@@ -375,89 +378,118 @@ if check_password():
         else:
             st.info("No logs found.")
     else:
-        if 'week_offset' not in st.session_state:
-            st.session_state.week_offset = 0
+        # --- NAVIGATION STATE ---
+        if 'month_offset' not in st.session_state:
+            st.session_state.month_offset = 0
 
-        # --- CENTERED NAVIGATION ---
         _, col_prev, col_text, col_next, _ = st.columns([5, 1, 2, 1, 5])
         
         with col_prev:
             if st.button("←", use_container_width=True):
-                st.session_state.week_offset += 1 
+                st.session_state.month_offset -= 1 
         with col_next:
             if st.button("→", use_container_width=True):
-                st.session_state.week_offset -= 1
+                st.session_state.month_offset += 1
 
+        # --- MONTH CALCULATIONS ---
         today = datetime.date.today()
-        start_of_week = today - timedelta(days=today.weekday() + 1) - timedelta(weeks=st.session_state.week_offset)
-        end_of_week = start_of_week + timedelta(days=6)
+        target_month = today.month + st.session_state.month_offset
+        target_year = today.year + (target_month - 1) // 12
+        target_month = (target_month - 1) % 12 + 1
         
+        first_day_of_month = datetime.date(target_year, target_month, 1)
+        _, days_in_month = calendar.monthrange(target_year, target_month)
+        last_day_of_month = datetime.date(target_year, target_month, days_in_month)
+        
+        # Calculate full calendar grid (starting on Sunday, ending on Saturday)
+        start_of_calendar = first_day_of_month - timedelta(days=(first_day_of_month.weekday() + 1) % 7)
+        end_of_calendar = last_day_of_month + timedelta(days=6 - (last_day_of_month.weekday() + 1) % 7)
+        
+        total_days = (end_of_calendar - start_of_calendar).days + 1
+        num_weeks = total_days // 7
+
+        # Fetch data for the entire calendar view BEFORE rendering the header
+        monthly_data = get_logs(start_date=start_of_calendar, end_date=end_of_calendar)
+        
+        # Calculate total hours specifically for the target month (ignoring grayed-out spillover days)
+        month_total_minutes = 0
+        if not monthly_data.empty:
+            for _, row in monthly_data.iterrows():
+                if str(row['date']).startswith(f"{target_year}-{target_month:02d}"):
+                    month_total_minutes += parse_time_str(row['time_spent'])
+        
+        # Format the badge
+        month_total_display = format_minutes(month_total_minutes)
+        badge_html = f" <span style='color: #2ea043; font-size: 0.8em; background-color: rgba(46, 160, 67, 0.1); padding: 4px 8px; border-radius: 4px; margin-left: 8px; vertical-align: middle;'>{month_total_display}</span>" if month_total_display else ""
+
         with col_text:
             st.markdown(
-                f"<div style='text-align: center; font-weight: bold; padding-top: 10px; white-space: nowrap;'>"
-                f"Week of {start_of_week.strftime('%b %d')}"
+                f"<div style='text-align: center; font-size: 1.2em; font-weight: bold; padding-top: 10px; white-space: nowrap;'>"
+                f"{calendar.month_name[target_month]} {target_year}{badge_html}"
                 f"</div>", 
                 unsafe_allow_html=True
             )
 
-        weekly_data = get_logs(start_date=start_of_week, end_date=end_of_week)
-        days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        days_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
-        week_html = '<div class="week-container">'
-        
-        for i in range(7):
-            current_day_date = start_of_week + timedelta(days=i)
-            date_str = current_day_date.strftime("%Y-%m-%d")
+        # --- RENDER CALENDAR ROWS ---
+        for w in range(num_weeks):
+            start_of_week = start_of_calendar + timedelta(weeks=w)
+            week_html = '<div class="week-container" style="margin-bottom: 20px;">'
             
-            day_label = days[i]
-            if current_day_date == today:
-                day_label = "<span style='color: #FFDF00; font-weight: bold; background-color: rgba(255, 223, 0, 0.1); padding: 2px 6px; border-radius: 4px; white-space: nowrap;'>Today</span><br>" + days[i]
-        #    elif current_day_date == today + timedelta(days=1):
-        #        day_label = "Tomorrow"
-        #    elif current_day_date == today - timedelta(days=1):
-        #        day_label = "Yesterday"
-
-            day_logs = weekly_data[weekly_data['date'] == date_str]
-            day_total_minutes = 0
-            
-            week_html += textwrap.dedent(f"""
-                <div class="day-card">
-                    <div class="day-header">
-                        <div class="day-name">{day_label}</div>
-                        <div class="day-date">{current_day_date.day}</div>
-                    </div>
-                    <div class="tickets-container">
-            """)
-            
-            for _, row in day_logs.iterrows():
-                t_id = row['ticket_id'] if row['ticket_id'] else ""
-                t_time = row['time_spent'] if row['time_spent'] else ""
-                desc = str(row['description']).replace(t_id, "").strip()
+            for i in range(7):
+                current_day_date = start_of_week + timedelta(days=i)
+                date_str = current_day_date.strftime("%Y-%m-%d")
                 
-                day_total_minutes += parse_time_str(t_time)
+                # Styling for days outside the current month
+                is_current_month = current_day_date.month == target_month
+                opacity_style = "opacity: 1;" if is_current_month else "opacity: 0.4;"
+                
+                day_label = days_names[i]
+                if current_day_date == today:
+                    day_label = "<span style='color: #FFDF00; font-weight: bold; background-color: rgba(255, 223, 0, 0.1); padding: 2px 6px; border-radius: 4px; white-space: nowrap;'>Today</span><br>"# + days_names[i]
+
+                day_logs = monthly_data[monthly_data['date'] == date_str]
+                day_total_minutes = 0
                 
                 week_html += textwrap.dedent(f"""
-                    <div class="ticket-entry">
-                        <div class="ticket-header">
-                            <span class="ticket-id">{t_id}</span>
-                            <span class="time-spent">{t_time}</span>
+                    <div class="day-card" style="{opacity_style}">
+                        <div class="day-header">
+                            <div class="day-name">{day_label}</div>
+                            <div class="day-date">{current_day_date.day}</div>
                         </div>
-                        <div class="ticket-desc">
-                            {desc}
+                        <div class="tickets-container">
+                """)
+                
+                for _, row in day_logs.iterrows():
+                    t_id = row['ticket_id'] if row['ticket_id'] else ""
+                    t_time = row['time_spent'] if row['time_spent'] else ""
+                    desc = str(row['description']).replace(str(t_id), "").strip()
+                    
+                    day_total_minutes += parse_time_str(t_time)
+                    
+                    week_html += textwrap.dedent(f"""
+                        <div class="ticket-entry">
+                            <div class="ticket-header">
+                                <span class="ticket-id">{t_id}</span>
+                                <span class="time-spent">{t_time}</span>
+                            </div>
+                            <div class="ticket-desc">
+                                {desc}
+                            </div>
                         </div>
-                    </div>
-                """)
-            
-            week_html += "</div>"
-            total_display = format_minutes(day_total_minutes)
-            if total_display:
-                week_html += textwrap.dedent(f"""
-                    <div class="day-footer">
-                        Total: <span style="color: #2ea043; font-weight: bold; background-color: rgba(46, 160, 67, 0.1); padding: 2px 6px; border-radius: 4px; white-space: nowrap;">{total_display}</span>
-                    </div>
-                """)
-            
-            week_html += "</div>"
+                    """)
+                
+                week_html += "</div>"
+                total_display = format_minutes(day_total_minutes)
+                if total_display:
+                    week_html += textwrap.dedent(f"""
+                        <div class="day-footer">
+                            Total: <span style="color: #2ea043; font-weight: bold; background-color: rgba(46, 160, 67, 0.1); padding: 2px 6px; border-radius: 4px; white-space: nowrap;">{total_display}</span>
+                        </div>
+                    """)
+                
+                week_html += "</div>"
 
-        week_html += '</div>'
-        st.markdown(week_html, unsafe_allow_html=True)
+            week_html += '</div>'
+            st.markdown(week_html, unsafe_allow_html=True)
